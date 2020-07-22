@@ -1,0 +1,410 @@
+#Structural Data
+param n;
+param ns;
+param nr;
+param maxvalind;
+param maxvalgrp;
+
+set N:=1..n;
+set NS:=1..ns;
+set NR:=1..nr;
+
+#Auxiliar Data
+param minv;
+param maxv;
+param maxinc;
+param nmonths;
+
+set MM:=minv..maxv;
+set MI:=1..maxinc+1;
+set NM:=1..nmonths;
+
+#Ponderations
+param ponder0;
+param pondermdis;
+param ponderind;
+param pondergrp;
+param ponderinc{MI};
+param ponderc{NR};
+
+#Ranges
+param nrange{NS,MM};
+param malerange{NS,MM};
+param femalerange{NS,MM};
+param rotrange{NS,MM};
+param minxp{NS};
+param minstr{NS};
+param mindis{NS};
+param mincomm;
+param fairresn{NS,NS};
+
+#People Data
+param sex{N};
+param comm{N};
+param last{N,NS};
+param xp{N,NS};
+param str{N,NS};
+param dis{N,NM};
+param inc{N,N};
+param comp{N,N};
+param bd{N,NS};
+param prefind{N,NS};
+param prefgrp{N,NS};
+
+var S{N,NS} binary;
+var I{N,N} binary;
+var Pi{N,NM,NR};
+var Ni{N,NM,NR};
+
+#Definitory constraints. They can�t be ponderated.
+s.t. C01_positiveP{i in N, j in NM, k in NR}:
+     Pi[i,j,k] >= 0;
+
+s.t. C02_positiveN{i in N, j in NM, k in NR}:
+     Ni[i,j,k] >= 0;
+
+s.t. C03_coherence{i in N}:
+     sum{j in NS}S[i,j] = 1;
+
+s.t. C04_sharesection{i in N, k in N, j in NS}:
+     S[i,j] + S[k,j] - I[i,k] <= 1;
+
+/*s.t. C05_auxsharesection{i in N, k in N, j in NS}:
+     S[i,j] + S[k,j] - 2*I[i,k] >= 0;
+     This constraint is not working for unknown reasons.*/
+
+#Constraints of the problem. Can be ponderated.
+s.t. C101_minpeople{j in NS}:
+     sum{i in N}S[i,j] - nrange[j,minv] - Pi[j,1,1] + Ni[j,1,1] >= 0;                                   #Minimum number of people in a section.
+
+s.t. C102_maxpeople{j in NS}:
+     sum{i in N}S[i,j] - nrange[j,maxv] - Pi[j,1,2] + Ni[j,1,2] <= 0;                                   #Maximum number of people in a section.
+
+s.t. C103_minmale{j in NS}:
+     sum{i in N}S[i,j]*sex[i] - malerange[j,minv] - Pi[j,1,3] + Ni[j,1,3] >= 0;                         #Minimum number of males in a section.
+
+s.t. C104_maxmale{j in NS}:
+     sum{i in N}S[i,j]*sex[i] - malerange[j,maxv] - Pi[j,1,4] + Ni[j,1,4] <= 0;                         #Maximum number of males in a section.
+
+s.t. C105_minfemale{j in NS}:
+     sum{i in N}S[i,j] - sum{i in N}S[i,j]*sex[i] - femalerange[j,minv] - Pi[j,1,5] + Ni[j,1,5] >= 0;   #Minumum number of females in a section.
+
+s.t. C106_maxfemale{j in NS}:
+     sum{i in N}S[i,j] - sum{i in N}S[i,j]*sex[i] - femalerange[j,maxv] - Pi[j,1,6] + Ni[j,1,6] <= 0;   #Maximum number of females in a section.
+
+s.t. C107_minnotrot{j in NS}:
+     sum{i in N}S[i,j]*last[i,j] - rotrange[j,minv] - Pi[j,1,7] + Ni[j,1,7] >= 0;                       #Minimum number of people that must stay in the same section as before.
+
+s.t. C108_minrot{j in NS}:
+     sum{i in N}S[i,j] - sum{i in N}S[i,j]*last[i,j] - rotrange[j,maxv] - Pi[j,1,8] + Ni[j,1,8] >= 0;   #Minimum number of people that must be new in a section.
+
+s.t. C109_minxp{j in NS}:
+     sum{i in N}S[i,j]*xp[i,j] - minxp[j] - Pi[j,1,9] + Ni[j,1,9] >= 0;                                 #Minimum people with experience in a section.
+
+s.t. C110_minstr{j in NS}:
+     sum{i in N}S[i,j]*str[i,j] - minstr[j] - Pi[j,1,10] + Ni[j,1,10] >= 0;                             #Minimum people able to lead a section.
+
+s.t. C111_mincommitment{j in NS}:
+     sum{i in N}S[i,j]*comm[i] - mincomm*sum{i in N}S[i,j] - Pi[j,1,11] + Ni[j,1,11] >= 0;              #Minimun average commitment in a section.
+
+s.t. C112_minmonthlydisponibility{j in NS,k in NM}:
+     sum{i in N}S[i,j]*dis[i,k]^pondermdis - mindis[j] - Pi[j,k,12] + Ni[j,k,12] >= 0;                  #Minimun people needed every month per section. Is pondered exponentially.
+
+s.t. C113_fairresourcesn{j in NS,k in NS}:
+     sum{i in N}S[i,j]*fairresn[j,k] - sum{i in N}S[i,k]*fairresn[j,k] - Pi[j,k,13] + Ni[j,k,13] >= 0;  #Ensures that a desired section gets more resources than other.
+
+s.t. C114_incompatibility{i in N}:
+     sum{k in N}I[i,k]*inc[i,k] - Pi[i,1,14] + Ni[i,1,14] <= 0;                                         #Ensures that people with incompatibility are not in the same section.
+
+s.t. C115_backdoor{i in N}:
+     sum{j in NS}S[i,j]*bd[i,j] - Pi[i,1,15] + Ni[i,1,15] <= 0;                                         #Hahaha..haha...HAHAHAHAH...MUAHAHAHAHAAHA
+
+maximize conformity: ponder0*(ponderind*((sum{i in N}sum{j in NS}S[i,j]*prefind[i,j] - sum{i in N}ponderinc[1 + sum{k in N}inc[i,k]]*sum{j in NS}S[i,j]*prefind[i,j])/maxvalind)
++ pondergrp*(sum{i in N}sum{j in NS}S[i,j]*prefgrp[i,j])/maxvalgrp
++ (1-ponderind-pondergrp)*((sum{i in N}sum{k in N}I[i,k]*comp[i,k])/(sum{i in N}sum{k in N}comp[i,k]))
+- sum{i in NR}sum{j in N}sum{k in NM}(Pi[j,k,i]+Ni[j,k,i])*ponderc[i]);
+/*Conformity is calculated based on the individual and groupal preferences. Incompatibilities substract
+individual value based on the ponderations. Both individual and groupal terms are normalized based on their
+maximum posible values. Then the term of constraints skipped substract the value ponderated individually
+for each constraint.*/
+
+data;
+
+param n:=17;                                    #Number of persons.
+param ns:=4;                                    #Number of sections.
+param nr:=15;                                   #Number of constraints.
+param maxvalind:=58.97;                         #Maximum posible individual conformity.
+param maxvalgrp:=59.85;                         #Maximun posible groupal conformity.
+
+param minv:=1;                                  #Where are located the minimum values in a matrix.
+param maxv:=2;                                  #Where are located the maximum values in a matrix.
+param maxinc:=4;                                #Maximum number of incompatibilitys per person.
+param nmonths:=12;                              #Number of months.
+
+param ponder0:=100;                             #Base that defines the conformity.
+param pondermdis:=2;                            #Ponderation of the monthly disponibility.
+param ponderind:=0.5;                           #Relative value of the individual conformity.
+param pondergrp:=0.25;                          #Relative value of the groupal conformity.
+param ponderinc:=                               #Ponderation of the incompatibilitys based on how much does one person have.
+      1    0
+      2    0
+      3    0.25
+      4    0.75
+      5    1;
+param ponderc:=                                 #Ponderation of the constraints. Needs previous calculations.
+1	0.048
+2	0.048
+3	0.008
+4	0.008
+5	0.008
+6	0.008
+7	0.008
+8	0.008
+9	0.016
+10	0.159
+11	0.016
+12	0.016
+13	0.000
+14	0.032
+15	1.594;
+
+param nrange:1   2:=                            #Range of people on each sections.
+      1    4   6
+      2    5   7
+      3    3   5
+      4    3   4;
+param malerange:1   2:=                         #Range of males on each sections.
+      1    2   6
+      2    2   7
+      3    0   5
+      4    0   3;
+param femalerange:1   2:=                       #Range of females on each sections.
+      1    2   6
+      2    2   7
+      3    0   5
+      4    0   3;
+param rotrange:1   2:=                          #Range of people that must be rotating on each section.
+      1    2   1
+      2    2   1
+      3    1   1
+      4    1   1;
+param minxp:=                                   #Minimum people with experience on each section.
+      1    2
+      2    2
+      3    1
+      4    1;
+param minstr:=                                  #Minimum people with leadership on each section.
+      1    2
+      2    2
+      3    1
+      4    1;
+param mindis:=                                  #Minimum people needed per month on each section.
+      1    3
+      2    3
+      3    2
+      4    1;
+param mincomm:=0.6;                             #Minimum average commitement on each section.
+param fairresn:1   2   3   4:=                  #Which section does need more resources than other.
+1	0	0	0       0
+2	0	0	0       0
+3	0	0	0	0
+4	0	0	0	0;
+
+param sex:=                                     #Sex of the people. 1:=Male; 2:=Female.
+1	1
+2	1
+3	1
+4	1
+5	0
+6	1
+7	1
+8	1
+9	1
+10	1
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+17	0;
+param comm:=                                    #Commitement of the people. Value per one.
+1	0.8
+2	0.7
+3	0.75
+4	0.95
+5	0.6
+6	0.7
+7	0.3
+8	1
+9	0.95
+10	0.5
+11	0.7
+12	0.7
+13	0.3
+14	0.65
+15	0.7
+16	0.6
+17	0.6;
+param last:1   2   3   4:=                      #Last section people was at.
+1	0	0	0	1
+2	0	1	0	0
+3	0	0	1	0
+4	0	1	0	0
+5	1	0	0	0
+6	1	0	0	0
+7	1	0	0	0
+8	0	1	0	0
+9	0	0	0	1
+10	0	0	1	0
+11	1	0	0	0
+12	0	1	0	0
+13	0	0	0	0
+14	0	1	0	0
+15	0	1	0	0
+16	0	0	0	0
+17	0	0	0	0;
+param xp:1   2   3   4:=                      #Experience at that section.
+1	1	0	1	1
+2	0	1	0	0
+3	0	1	1	0
+4	1	1	0	0
+5	1	1	0	0
+6	1	0	0	0
+7	1	0	0	0
+8	0	1	0	0
+9	0	0	0	1
+10	0	1	1	1
+11	1	0	0	0
+12	0	1	0	0
+13	1	1	1	0
+14	0	1	0	0
+15	0	1	0	0
+16	0	0	0	0
+17	0	0	0	0;
+param str:1   2   3   4:=                       #In which section people is strong enough to lead.
+1	0	0	1	1
+2	0	0	0	0
+3	0	0	1	0
+4	1	1	0	0
+5	1	0	0	0
+6	0	0	0	0
+7	0	0	0	0
+8	0	1	0	0
+9	0	0	0	0
+10	0	1	0	1
+11	1	0	0	0
+12	0	0	0	0
+13	0	0	0	0
+14	0	1	0	0
+15	0	0	0	0
+16	0	0	0	0
+17	0	0	0	0;
+param dis:1   2   3   4   5   6   7   8   9   10  11  12:=        #Monthly disponibility of the people.
+1	1	1	1	1	1	1	1	1	1	1	1	1
+2	1	0	0	0	0	0	1	1	1	1	1	1
+3	1	1	0	0	0	0	1	1	1	1	1	1
+4	1	1	1	1	1	1	1	1	1	1	1	1
+5	1	1	1	1	1	1	1	1	1	1	1	1
+6	0	1	1	1	0	0	1	1	1	1	1	0
+7	1	0	0	0	0	0	1	1	1	1	1	1
+8	1	1	1	1	1	1	1	1	1	1	1	1
+9	1	1	1	1	1	1	1	1	1	1	1	1
+10	1	1	1	1	1	1	1	1	1	1	1	1
+11	0	1	1	1	0	1	1	1	1	1	1	1
+12	1	1	1	1	1	1	1	1	1	1	1	1
+13	1	1	1	1	1	1	1	1	1	0	0	0
+14	0	1	1	1	0	0	1	1	1	1	1	1
+15	0	1	1	1	0	1	1	1	1	1	1	1
+16	0	1	1	1	0	1	1	1	1	1	1	1
+17	0	1	1	1	0	1	1	1	1	1	1	1;
+param inc:1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17:=        #Incompatibilities.
+1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+2	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+3	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+4	0	0	0	0	0	0	0	0	0	0	1	0	0	1	1	0	0
+5	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+6	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+7	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+9	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+10	0	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+11	0	0	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0
+12	0	0	0	1	0	0	0	0	0	0	0	0	0	1	1	0	0
+13	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+14	0	0	0	1	0	0	0	0	0	0	0	1	0	0	1	0	0
+15	0	0	0	1	0	0	0	0	0	0	0	1	0	1	0	0	0
+16	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+17	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0;
+param comp:1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17:=         #Compatibilities. Not working yet.
+1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+2	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+3	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+4	0	0	0	0	0	0	0	0	0	0	1	0	0	1	1	0	0
+5	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+6	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+7	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+9	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+10	0	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+11	0	0	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0
+12	0	0	0	1	0	0	0	0	0	0	0	0	0	1	1	0	0
+13	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+14	0	0	0	1	0	0	0	0	0	0	0	1	0	0	1	0	0
+15	0	0	0	1	0	0	0	0	0	0	0	1	0	1	0	0	0
+16	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+17	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0;
+param bd:1   2   3   4:=     #Heheheh
+1	0	0	0	0
+2	0	0	1	0
+3	0	0	0	0
+4	0	0	1	0
+5	0	0	0	0
+6	0	0	0	0
+7	0	0	0	0
+8	0	0	0	0
+9	0	0	1	0
+10	0	0	0	0
+11	0	0	1	1
+12	0	0	1	1
+13	0	0	1	0
+14	0	0	1	1
+15	0	0	1	1
+16	0	0	1	1
+17	0	0	1	1;
+param prefind:1   2   3   4:=        #Individual preferences. Needs previous calculations.
+1	1.60	2.00	3.20	3.20
+2	1.76	4.00	1.76	2.48
+3	0.73	2.63	4.00	2.63
+4	1.67	3.67	0.67	4.00
+5	2.50	2.50	2.50	2.50
+6	4.00	2.89	1.56	1.56
+7	4.00	2.00	2.00	2.00
+8	0.36	2.50	3.57	3.57
+9	1.20	2.40	3.20	3.20
+10	0.55	4.00	2.72	2.72
+11	4.00	3.85	1.07	1.07
+12	3.33	4.00	1.83	0.83
+13	2.50	2.50	2.50	2.50
+14	1.02	4.00	3.96	1.02
+15	1.80	4.00	2.98	1.22
+16	2.00	4.00	2.00	2.00
+17	4.00	2.00	2.00	2.00;
+param prefgrp:1   2   3   4:=       #Groupal preferences. Needs previous calculations.
+1	1.60	2.00	3.20	3.20
+2	1.76	4.00	1.76	2.48
+3	0.73	2.63	4.00	2.63
+4	1.67	3.67	0.67	4.00
+5	2.50	2.50	2.50	2.50
+6	4.00	2.89	1.56	1.56
+7	4.00	2.00	2.00	2.00
+8	0.36	2.50	3.57	3.57
+9	1.20	2.40	3.20	3.20
+10	0.55	4.00	2.72	2.72
+11	4.00	3.85	1.07	1.07
+12	3.33	4.00	1.83	0.83
+13	2.50	2.50	2.50	2.50
+14	1.02	4.00	3.96	1.02
+15	1.80	4.00	2.98	1.22
+16	2.00	4.00	2.00	2.00
+17	4.00	2.00	2.00	2.00;
